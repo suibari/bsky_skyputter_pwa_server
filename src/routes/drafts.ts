@@ -43,7 +43,12 @@ router.get('/:id', async (req: Request, res: Response) => {
     return;
   }
 
-  const { id } = req.params;
+  const id = req.params['id'];
+  if (!id) {
+    res.status(400).json({ error: 'id is required' });
+    return;
+  }
+
   try {
     const rows = await sql`
       SELECT id, text, created_at, updated_at
@@ -54,7 +59,8 @@ router.get('/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Draft not found' });
       return;
     }
-    const r = rows[0];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const r = rows[0]!;
     res.json({
       id: r.id as string,
       text: r.text as string,
@@ -78,9 +84,13 @@ router.put('/:id', async (req: Request, res: Response) => {
     return;
   }
 
-  const { id } = req.params;
-  const { text, createdAt } = req.body as { text?: string; createdAt?: string };
+  const id = req.params['id'];
+  if (!id) {
+    res.status(400).json({ error: 'id is required' });
+    return;
+  }
 
+  const { text, createdAt } = req.body as { text?: string; createdAt?: string };
   if (typeof text !== 'string' || typeof createdAt !== 'string') {
     res.status(400).json({ error: 'text and createdAt are required' });
     return;
@@ -111,7 +121,12 @@ router.delete('/:id', async (req: Request, res: Response) => {
     return;
   }
 
-  const { id } = req.params;
+  const id = req.params['id'];
+  if (!id) {
+    res.status(400).json({ error: 'id is required' });
+    return;
+  }
+
   try {
     await sql`
       DELETE FROM skyputter.drafts
