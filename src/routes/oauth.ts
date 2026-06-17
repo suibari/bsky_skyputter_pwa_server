@@ -115,6 +115,7 @@ router.get('/callback', async (req: Request, res: Response) => {
     const clientUrl = new URL(firstClientUrl);
     clientUrl.pathname = '/oauth/callback';
     clientUrl.searchParams.set('did', did);
+    clientUrl.searchParams.set('handle', handle);
     clientUrl.searchParams.set('accessJwt', accessJwt);
     res.redirect(clientUrl.toString());
   } catch (err) {
