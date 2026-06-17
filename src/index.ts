@@ -2,8 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import { initWebPush } from './webpush.js';
 import { initJetstream } from './jetstream.js';
-import { initOAuth } from './routes/oauth.js';
 import oauthRouter from './routes/oauth.js';
+import authRouter from './routes/auth.js';
 import pushRouter from './routes/push.js';
 import notificationsRouter from './routes/notifications.js';
 import draftsRouter from './routes/drafts.js';
@@ -11,9 +11,9 @@ import draftsRouter from './routes/drafts.js';
 const app = express();
 app.use(express.json());
 
-// CORS（複数オリジン対応。CLIENT_URLS にカンマ区切りで指定、CLIENT_URL も後方互換で使用）
+// CORS（複数オリジン対応。CLIENT_URLS にカンマ区切りで指定）
 const allowedOrigins = new Set(
-  (process.env.CLIENT_URLS ?? process.env.CLIENT_URL ?? '')
+  (process.env.CLIENT_URLS ?? '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
@@ -35,6 +35,7 @@ app.use((req, res, next) => {
 
 // ルーティング
 app.use('/oauth', oauthRouter);
+app.use('/api/auth', authRouter);
 app.use('/api/push', pushRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/drafts', draftsRouter);
@@ -46,7 +47,7 @@ app.get('/health', (_req, res) => {
 
 async function main() {
   try {
-    await Promise.all([initWebPush(), initOAuth()]);
+    await Promise.all([initWebPush()]);
     await initJetstream();
 
     const port = Number(process.env.PORT ?? 3000);
