@@ -18,9 +18,10 @@ router.get('/vapid-public-key', async (_req: Request, res: Response) => {
 
 // POST /api/push/subscribe
 // Push購読情報をDBに登録する
-// Authorizationヘッダ: Bearer <did>  ※簡易実装。本番OAuthでは検証済みセッションを使う
+// Authorizationヘッダ: Bearer <accessJwt>（Bluesky getSession で検証）
 router.post('/subscribe', async (req: Request, res: Response) => {
-  const userDid = extractDid(req);
+  const token = extractBearerToken(req);
+  const userDid = token ? await verifyAccessJwt(token) : null;
   if (!userDid) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
@@ -51,7 +52,8 @@ router.post('/subscribe', async (req: Request, res: Response) => {
 // DELETE /api/push/subscribe
 // Push購読情報をDBから削除する
 router.delete('/subscribe', async (req: Request, res: Response) => {
-  const userDid = extractDid(req);
+  const token = extractBearerToken(req);
+  const userDid = token ? await verifyAccessJwt(token) : null;
   if (!userDid) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
@@ -75,14 +77,26 @@ router.delete('/subscribe', async (req: Request, res: Response) => {
   }
 });
 
-// AuthorizationヘッダからDIDを取り出す簡易関数
-// "Bearer <did>" 形式を想定
-function extractDid(req: Request): string | null {
+// Bearerトークンを取り出す
+function extractBearerToken(req: Request): string | null {
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) return null;
-  const did = auth.slice(7).trim();
-  if (!did.startsWith('did:')) return null;
-  return did;
+  return auth.slice(7).trim();
+}
+
+// AT Protocol の getSession でアクセストークンを検証し、DIDを返す
+// 検証失敗時は null を返す
+async function verifyAccessJwt(accessJwt: string): Promise<string | null> {
+  try {
+    const res = await fetch('https://bsky.social/xrpc/com.atproto.server.getSession', {
+      headers: { Authorization: `Bearer ${accessJwt}` },
+    });
+    if (!res.ok) return null;
+    const { did } = await res.json() as { did: string };
+    return typeof did === 'string' && did.startsWith('did:') ? did : null;
+  } catch {
+    return null;
+  }
 }
 
 export default router;
