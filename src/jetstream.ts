@@ -103,6 +103,9 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
 
   // 投稿系（リプライ・メンション・引用）
   if (collection === 'app.bsky.feed.post') {
+    const postText = typeof record.text === 'string' ? record.text.trim() : '';
+    const truncatedText = postText.length > 100 ? postText.slice(0, 100) + '…' : postText;
+
     // リプライ
     const replyParentUri = (
       record.reply as { parent?: { uri?: string } } | undefined
@@ -112,8 +115,8 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
       if (targetDid && registeredDids.has(targetDid) && targetDid !== senderDid) {
         const senderHandle = await getHandle(senderDid);
         await sendPushToUser(targetDid, {
-          title: 'リプライ',
-          body: `${senderHandle}さんが返信しました`,
+          title: `${senderHandle}さんが返信しました`,
+          body: truncatedText || '（テキストなし）',
           type: 'reply',
         });
         return;
@@ -129,8 +132,8 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
       if (targetDid && registeredDids.has(targetDid) && targetDid !== senderDid) {
         const senderHandle = await getHandle(senderDid);
         await sendPushToUser(targetDid, {
-          title: '引用',
-          body: `${senderHandle}さんに引用されました`,
+          title: `${senderHandle}さんが引用しました`,
+          body: truncatedText || '（テキストなし）',
           type: 'quote',
         });
         return;
@@ -154,8 +157,8 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
           ) {
             const senderHandle = await getHandle(senderDid);
             await sendPushToUser(feature.did, {
-              title: 'メンション',
-              body: `${senderHandle}さんにメンションされました`,
+              title: `${senderHandle}さんにメンションされました`,
+              body: truncatedText || '（テキストなし）',
               type: 'mention',
             });
           }
