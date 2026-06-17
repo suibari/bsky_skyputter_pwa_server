@@ -6,6 +6,7 @@ import { initOAuth } from './routes/oauth.js';
 import oauthRouter from './routes/oauth.js';
 import pushRouter from './routes/push.js';
 import notificationsRouter from './routes/notifications.js';
+import draftsRouter from './routes/drafts.js';
 
 const app = express();
 app.use(express.json());
@@ -24,7 +25,7 @@ app.use((req, res, next) => {
     res.header('Vary', 'Origin');
   }
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') {
     res.sendStatus(204);
     return;
@@ -36,6 +37,7 @@ app.use((req, res, next) => {
 app.use('/oauth', oauthRouter);
 app.use('/api/push', pushRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/drafts', draftsRouter);
 
 // ヘルスチェック
 app.get('/health', (_req, res) => {
