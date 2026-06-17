@@ -26,10 +26,9 @@ router.post('/subscribe', async (req: Request, res: Response) => {
     return;
   }
 
-  const { endpoint, keys } = req.body as {
-    endpoint?: string;
-    keys?: { p256dh?: string; auth?: string };
-  };
+  type SubBody = { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+  const body = req.body as SubBody & { subscription?: SubBody };
+  const { endpoint, keys } = body.subscription ?? body;
 
   if (!endpoint || !keys?.p256dh || !keys?.auth) {
     res.status(400).json({ error: 'Invalid subscription object' });
