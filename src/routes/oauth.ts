@@ -139,12 +139,12 @@ router.post('/app-password-login', async (req: Request, res: Response) => {
       body: JSON.stringify({ identifier, password }),
     });
     if (!loginRes.ok) throw new Error(`Login request failed: ${loginRes.status}`);
-    const result = await loginRes.json() as { did: string; handle: string; accessJwt: string };
+    const result = await loginRes.json() as { did: string; handle: string; accessJwt: string; refreshJwt?: string };
 
-    const { did, handle, accessJwt } = result;
+    const { did, handle, accessJwt, refreshJwt } = result;
     await upsertUser(did, handle);
 
-    res.json({ did, handle, accessJwt });
+    res.json({ did, handle, accessJwt, refreshJwt });
   } catch (err) {
     console.error('[oauth] Dev login failed:', err);
     res.status(401).json({ error: 'Login failed' });
