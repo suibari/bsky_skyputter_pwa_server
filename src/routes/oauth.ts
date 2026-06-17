@@ -14,8 +14,8 @@ const stateStoreMap = new Map<string, NodeSavedState>();
 const sessionStoreMap = new Map<string, NodeSavedSession>();
 
 export async function initOAuth(): Promise<void> {
-  if (process.env.DEV_MODE === 'true') {
-    console.log('[oauth] DEV_MODE enabled. Using App Password fallback.');
+  if (!process.env.ATPROTO_CLIENT_ID) {
+    console.log('[oauth] ATPROTO_CLIENT_ID not set. OAuth disabled, App Password only.');
     return;
   }
 
@@ -63,12 +63,8 @@ router.get('/client-metadata.json', (_req: Request, res: Response) => {
 // GET /oauth/login?handle=xxx.bsky.social
 // OAuthログインフローを開始する
 router.get('/login', async (req: Request, res: Response) => {
-  if (process.env.DEV_MODE === 'true') {
-    res.status(400).json({ error: 'Use /oauth/dev-login in DEV_MODE' });
-    return;
-  }
   if (!oauthClient) {
-    res.status(500).json({ error: 'OAuth not initialized' });
+    res.status(503).json({ error: 'OAuth not available. Use App Password login.' });
     return;
   }
 
@@ -125,18 +121,11 @@ router.get('/callback', async (req: Request, res: Response) => {
   }
 });
 
-// POST /oauth/dev-login
-// DEV_MODE=true のときのみ有効。App Passwordで認証する
-router.post('/dev-login', async (req: Request, res: Response) => {
-  if (process.env.DEV_MODE !== 'true') {
-    res.status(403).json({ error: 'DEV_MODE is not enabled' });
-    return;
-  }
-
-  const identifier = (req.body as { identifier?: string }).identifier
-    ?? process.env.DEV_IDENTIFIER;
-  const password = (req.body as { password?: string }).password
-    ?? process.env.DEV_APP_PASSWORD;
+// POST /oauth/app-password-login
+// App Passwordで認証する（常時有効）
+router.post('/app-password-login', async (req: Request, res: Response) => {
+  const identifier = (req.body as { identifier?: string }).identifier;
+  const password = (req.body as { password?: string }).password;
 
   if (!identifier || !password) {
     res.status(400).json({ error: 'identifier and password are required' });
