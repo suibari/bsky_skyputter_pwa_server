@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { initWebPush } from './webpush.js';
 import { initJetstream } from './jetstream.js';
-import oauthRouter from './routes/oauth.js';
+import loginRouter from './routes/login.js';
 import authRouter from './routes/auth.js';
 import pushRouter from './routes/push.js';
 import notificationsRouter from './routes/notifications.js';
@@ -34,7 +34,7 @@ app.use((req, res, next) => {
 });
 
 // ルーティング
-app.use('/oauth', oauthRouter);
+app.use('/login', loginRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/push', pushRouter);
 app.use('/api/notifications', notificationsRouter);

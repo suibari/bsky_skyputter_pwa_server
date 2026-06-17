@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type IRouter } from 'express';
-import { upsertUser } from './oauth.js';
+import { upsertUser } from './login.js';
 
 const router: IRouter = Router();
 

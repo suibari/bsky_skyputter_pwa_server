@@ -2,25 +2,9 @@ import { Router, type Request, type Response, type IRouter } from 'express';
 
 const router: IRouter = Router();
 
-// GET /client-metadata.json
-// AT Protocol OAuth クライアントメタデータ（ブラウザ側 OAuth クライアントが参照）
-router.get('/client-metadata.json', (_req: Request, res: Response) => {
-  res.json({
-    client_id: process.env.ATPROTO_CLIENT_ID,
-    client_name: 'SkyPutter',
-    redirect_uris: [process.env.ATPROTO_REDIRECT_URI],
-    scope: 'atproto transition:generic',
-    grant_types: ['authorization_code', 'refresh_token'],
-    response_types: ['code'],
-    token_endpoint_auth_method: 'none',
-    application_type: 'web',
-    dpop_bound_access_tokens: true,
-  });
-});
-
-// POST /oauth/app-password-login
-// App Password で認証する（常時有効）
-router.post('/app-password-login', async (req: Request, res: Response) => {
+// POST /login/app-password
+// App Password で認証する
+router.post('/app-password', async (req: Request, res: Response) => {
   const identifier = (req.body as { identifier?: string }).identifier;
   const password = (req.body as { password?: string }).password;
 
