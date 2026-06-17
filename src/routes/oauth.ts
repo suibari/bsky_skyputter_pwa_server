@@ -110,7 +110,9 @@ router.get('/callback', async (req: Request, res: Response) => {
 
     // クライアントにDIDとアクセストークンをクエリパラメータで渡す
     // 本番ではよりセキュアな方法（セッションCookieなど）を検討すること
-    const clientUrl = new URL(process.env.CLIENT_URL!);
+    const firstClientUrl = (process.env.CLIENT_URLS ?? '').split(',').map((s: string) => s.trim()).filter(Boolean)[0];
+    if (!firstClientUrl) throw new Error('CLIENT_URLS is not set');
+    const clientUrl = new URL(firstClientUrl);
     clientUrl.pathname = '/oauth/callback';
     clientUrl.searchParams.set('did', did);
     clientUrl.searchParams.set('accessJwt', accessJwt);
