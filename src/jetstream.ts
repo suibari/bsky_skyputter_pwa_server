@@ -4,6 +4,8 @@ import { sendPushToUser, type PushPayload } from './webpush.js';
 
 // ハンドル名キャッシュ（DID -> handle）
 const handleCache = new Map<string, string>();
+// 投稿テキストキャッシュ（URI -> truncated text）
+const postTextCache = new Map<string, string>();
 
 // 登録済みユーザー一覧のキャッシュ（DID -> Set<投稿URI prefix>）
 // 通知判定のたびにDBを叩かないようにメモリに持つ
@@ -47,6 +49,24 @@ type JetstreamEvent = {
   };
 };
 
+// 投稿テキスト取得（キャッシュ付き）
+async function getPostText(uri: string): Promise<string> {
+  if (postTextCache.has(uri)) return postTextCache.get(uri)!;
+  try {
+    const res = await fetch(
+      `https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(uri)}`
+    );
+    if (!res.ok) return '';
+    const data = (await res.json()) as { posts?: Array<{ record?: { text?: string } }> };
+    const text = data.posts?.[0]?.record?.text ?? '';
+    const truncated = text.length > 100 ? text.slice(0, 100) + '…' : text;
+    postTextCache.set(uri, truncated);
+    return truncated;
+  } catch {
+    return '';
+  }
+}
+
 // 通知判定・Push送信
 // getHandle() は registeredDids.has() で対象ユーザーが確認されてから呼ぶ（不要なHTTPリクエスト削減）
 async function handleEvent(event: JetstreamEvent): Promise<void> {
@@ -61,10 +81,10 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
     if (!subjectUri) return;
     const targetDid = extractDidFromUri(subjectUri);
     if (targetDid && registeredDids.has(targetDid)) {
-      const senderHandle = await getHandle(senderDid);
+      const [senderHandle, postText] = await Promise.all([getHandle(senderDid), getPostText(subjectUri)]);
       await sendPushToUser(targetDid, {
-        title: 'いいね',
-        body: `${senderHandle}さんがいいねしました`,
+        title: `${senderHandle}さんがいいねしました`,
+        body: postText || '（テキストなし）',
         type: 'like',
       });
     }
@@ -77,10 +97,10 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
     if (!subjectUri) return;
     const targetDid = extractDidFromUri(subjectUri);
     if (targetDid && registeredDids.has(targetDid)) {
-      const senderHandle = await getHandle(senderDid);
+      const [senderHandle, postText] = await Promise.all([getHandle(senderDid), getPostText(subjectUri)]);
       await sendPushToUser(targetDid, {
-        title: 'リポスト',
-        body: `${senderHandle}さんがリポストしました`,
+        title: `${senderHandle}さんがリポストしました`,
+        body: postText || '（テキストなし）',
         type: 'repost',
       });
     }
