@@ -2,8 +2,8 @@ import { WebSocket } from 'ws';
 import { sql } from './db.js';
 import { sendPushToUser, type PushPayload } from './webpush.js';
 
-// ハンドル名キャッシュ（DID -> handle）
-const handleCache = new Map<string, string>();
+// 表示名キャッシュ（DID -> displayName || handle）
+const displayNameCache = new Map<string, string>();
 // 投稿テキストキャッシュ（URI -> truncated text）
 const postTextCache = new Map<string, string>();
 
@@ -23,18 +23,18 @@ export function addRegisteredUser(did: string): void {
   registeredDids.add(did);
 }
 
-// ハンドル名取得（キャッシュ付き）
-async function getHandle(did: string): Promise<string> {
-  if (handleCache.has(did)) return handleCache.get(did)!;
+// 表示名取得（キャッシュ付き、displayName 優先 → handle → did）
+async function getDisplayName(did: string): Promise<string> {
+  if (displayNameCache.has(did)) return displayNameCache.get(did)!;
   try {
     const res = await fetch(
       `https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(did)}`
     );
     if (!res.ok) return did;
-    const data = (await res.json()) as { handle?: string };
-    const handle = data.handle ?? did;
-    handleCache.set(did, handle);
-    return handle;
+    const data = (await res.json()) as { handle?: string; displayName?: string };
+    const name = data.displayName || data.handle || did;
+    displayNameCache.set(did, name);
+    return name;
   } catch {
     return did;
   }
@@ -68,7 +68,7 @@ async function getPostText(uri: string): Promise<string> {
 }
 
 // 通知判定・Push送信
-// getHandle() は registeredDids.has() で対象ユーザーが確認されてから呼ぶ（不要なHTTPリクエスト削減）
+// getDisplayName() は registeredDids.has() で対象ユーザーが確認されてから呼ぶ（不要なHTTPリクエスト削減）
 async function handleEvent(event: JetstreamEvent): Promise<void> {
   const { did: senderDid, commit } = event;
   if (!commit?.record) return;
@@ -81,9 +81,9 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
     if (!subjectUri) return;
     const targetDid = extractDidFromUri(subjectUri);
     if (targetDid && registeredDids.has(targetDid)) {
-      const [senderHandle, postText] = await Promise.all([getHandle(senderDid), getPostText(subjectUri)]);
+      const [senderName, postText] = await Promise.all([getDisplayName(senderDid), getPostText(subjectUri)]);
       await sendPushToUser(targetDid, {
-        title: `${senderHandle}さんがいいねしました`,
+        title: `${senderName}さんがいいねしました`,
         body: postText || '（テキストなし）',
         type: 'like',
       });
@@ -97,9 +97,9 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
     if (!subjectUri) return;
     const targetDid = extractDidFromUri(subjectUri);
     if (targetDid && registeredDids.has(targetDid)) {
-      const [senderHandle, postText] = await Promise.all([getHandle(senderDid), getPostText(subjectUri)]);
+      const [senderName, postText] = await Promise.all([getDisplayName(senderDid), getPostText(subjectUri)]);
       await sendPushToUser(targetDid, {
-        title: `${senderHandle}さんがリポストしました`,
+        title: `${senderName}さんがリポストしました`,
         body: postText || '（テキストなし）',
         type: 'repost',
       });
@@ -111,10 +111,10 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
   if (collection === 'app.bsky.graph.follow') {
     const targetDid = record.subject as string | undefined;
     if (targetDid && registeredDids.has(targetDid)) {
-      const senderHandle = await getHandle(senderDid);
+      const senderName = await getDisplayName(senderDid);
       await sendPushToUser(targetDid, {
         title: 'フォロー',
-        body: `${senderHandle}さんにフォローされました`,
+        body: `${senderName}さんにフォローされました`,
         type: 'follow',
       });
     }
@@ -133,9 +133,9 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
     if (replyParentUri) {
       const targetDid = extractDidFromUri(replyParentUri);
       if (targetDid && registeredDids.has(targetDid) && targetDid !== senderDid) {
-        const senderHandle = await getHandle(senderDid);
+        const senderName = await getDisplayName(senderDid);
         await sendPushToUser(targetDid, {
-          title: `${senderHandle}さんが返信しました`,
+          title: `${senderName}さんが返信しました`,
           body: truncatedText || '（テキストなし）',
           type: 'reply',
         });
@@ -150,9 +150,9 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
     if (embed?.$type === 'app.bsky.embed.record' && embed.record?.uri) {
       const targetDid = extractDidFromUri(embed.record.uri);
       if (targetDid && registeredDids.has(targetDid) && targetDid !== senderDid) {
-        const senderHandle = await getHandle(senderDid);
+        const senderName = await getDisplayName(senderDid);
         await sendPushToUser(targetDid, {
-          title: `${senderHandle}さんが引用しました`,
+          title: `${senderName}さんが引用しました`,
           body: truncatedText || '（テキストなし）',
           type: 'quote',
         });
@@ -175,9 +175,9 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
             registeredDids.has(feature.did) &&
             feature.did !== senderDid
           ) {
-            const senderHandle = await getHandle(senderDid);
+            const senderName = await getDisplayName(senderDid);
             await sendPushToUser(feature.did, {
-              title: `${senderHandle}さんにメンションされました`,
+              title: `${senderName}さんにメンションされました`,
               body: truncatedText || '（テキストなし）',
               type: 'mention',
             });
