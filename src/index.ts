@@ -11,16 +11,23 @@ import draftsRouter from './routes/drafts.js';
 const app = express();
 app.use(express.json());
 
-// CORS（複数オリジン対応。CLIENT_URLS にカンマ区切りで指定）
-const allowedOrigins = new Set(
-  (process.env.CLIENT_URLS ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-);
+// CORS（複数オリジン対応。CLIENT_URLS にカンマ区切りで指定。* ワイルドカード使用可）
+const allowedPatterns = (process.env.CLIENT_URLS ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function isAllowedOrigin(origin: string): boolean {
+  return allowedPatterns.some((pattern) => {
+    if (!pattern.includes('*')) return pattern === origin;
+    const re = new RegExp('^' + pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+    return re.test(origin);
+  });
+}
+
 app.use((req, res, next) => {
   const origin = req.headers.origin ?? '';
-  if (allowedOrigins.has(origin)) {
+  if (isAllowedOrigin(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
   }
