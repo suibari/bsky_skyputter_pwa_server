@@ -4,7 +4,7 @@ import { sql } from './db.js';
 export type PushPayload = {
   title: string;
   body: string;
-  type: 'like' | 'repost' | 'follow' | 'reply' | 'mention' | 'quote';
+  type: 'like' | 'repost' | 'follow' | 'reply' | 'mention' | 'quote' | 'dm';
 };
 
 let cachedPublicKey: string | null = null;

@@ -23,7 +23,7 @@ router.post('/app-password', async (req: Request, res: Response) => {
     const result = await loginRes.json() as { did: string; handle: string; accessJwt: string; refreshJwt?: string };
 
     const { did, handle, accessJwt, refreshJwt } = result;
-    await upsertUser(did, handle);
+    await upsertUser(did, handle, accessJwt, refreshJwt);
 
     res.json({ did, handle, accessJwt, refreshJwt });
   } catch (err) {
@@ -32,15 +32,29 @@ router.post('/app-password', async (req: Request, res: Response) => {
   }
 });
 
-export async function upsertUser(did: string, handle: string): Promise<void> {
+export async function upsertUser(
+  did: string,
+  handle: string,
+  accessJwt?: string,
+  refreshJwt?: string
+): Promise<void> {
   const { sql } = await import('../db.js');
   const { addRegisteredUser } = await import('../jetstream.js');
-  await sql`
-    INSERT INTO skyputter.users (did, handle)
-    VALUES (${did}, ${handle})
-    ON CONFLICT (did) DO UPDATE
-    SET handle = ${handle}, updated_at = NOW()
-  `;
+  if (accessJwt && refreshJwt) {
+    await sql`
+      INSERT INTO skyputter.users (did, handle, access_jwt, refresh_jwt)
+      VALUES (${did}, ${handle}, ${accessJwt}, ${refreshJwt})
+      ON CONFLICT (did) DO UPDATE
+      SET handle = ${handle}, access_jwt = ${accessJwt}, refresh_jwt = ${refreshJwt}, updated_at = NOW()
+    `;
+  } else {
+    await sql`
+      INSERT INTO skyputter.users (did, handle)
+      VALUES (${did}, ${handle})
+      ON CONFLICT (did) DO UPDATE
+      SET handle = ${handle}, updated_at = NOW()
+    `;
+  }
   addRegisteredUser(did);
   console.log(`[oauth] User upserted: ${handle} (${did})`);
 }

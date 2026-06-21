@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { initWebPush } from './webpush.js';
 import { initJetstream } from './jetstream.js';
+import { initDmPoller } from './dm-poller.js';
 import loginRouter from './routes/login.js';
 import authRouter from './routes/auth.js';
 import pushRouter from './routes/push.js';
@@ -56,6 +57,7 @@ async function main() {
   try {
     await Promise.all([initWebPush()]);
     await initJetstream();
+    await initDmPoller();
 
     const port = Number(process.env.PORT ?? 3000);
     app.listen(port, () => {
