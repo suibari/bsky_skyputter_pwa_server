@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type IRouter } from 'express';
 import { sql } from '../db.js';
+import { extractBearerToken, verifyAccessJwt } from '../auth-util.js';
 
 const router: IRouter = Router();
 
@@ -138,24 +139,5 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to delete draft' });
   }
 });
-
-function extractBearerToken(req: Request): string | null {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith('Bearer ')) return null;
-  return auth.slice(7).trim();
-}
-
-async function verifyAccessJwt(accessJwt: string): Promise<string | null> {
-  try {
-    const res = await fetch('https://bsky.social/xrpc/com.atproto.server.getSession', {
-      headers: { Authorization: `Bearer ${accessJwt}` },
-    });
-    if (!res.ok) return null;
-    const { did } = await res.json() as { did: string };
-    return typeof did === 'string' && did.startsWith('did:') ? did : null;
-  } catch {
-    return null;
-  }
-}
 
 export default router;

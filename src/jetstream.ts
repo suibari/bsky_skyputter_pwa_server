@@ -11,6 +11,10 @@ const postTextCache = new Map<string, string>();
 // 通知判定のたびにDBを叩かないようにメモリに持つ
 let registeredDids = new Set<string>();
 
+// RepostNextPost 機能をONにしているユーザーのキャッシュ
+// リポスト検出時に「このリポストを記録すべきか」を判定するために持つ
+let repostEnabledDids = new Set<string>();
+
 // 起動時にDBからDID一覧を読み込む
 export async function reloadRegisteredUsers(): Promise<void> {
   const rows = await sql`SELECT did FROM skyputter.users`;
@@ -18,9 +22,22 @@ export async function reloadRegisteredUsers(): Promise<void> {
   console.log(`[jetstream] Loaded ${registeredDids.size} registered user(s).`);
 }
 
+// RepostNextPost をONにしているユーザーをDBから読み込む
+export async function reloadRepostNextPostUsers(): Promise<void> {
+  const rows = await sql`SELECT did FROM skyputter.users WHERE repost_next_post_enabled = true`;
+  repostEnabledDids = new Set(rows.map((r) => r.did as string));
+  console.log(`[jetstream] Loaded ${repostEnabledDids.size} RepostNextPost user(s).`);
+}
+
 // ユーザー追加時に単一DIDを追加（全件リロード不要）
 export function addRegisteredUser(did: string): void {
   registeredDids.add(did);
+}
+
+// RepostNextPost のON/OFFをメモリキャッシュに即時反映
+export function setRepostNextPostEnabled(did: string, enabled: boolean): void {
+  if (enabled) repostEnabledDids.add(did);
+  else repostEnabledDids.delete(did);
 }
 
 // 表示名取得（キャッシュ付き、displayName 優先 → handle → did）
@@ -45,6 +62,8 @@ type JetstreamEvent = {
   did: string; // 送信者DID
   commit?: {
     collection: string;
+    rkey?: string;
+    cid?: string;
     record?: Record<string, unknown>;
   };
 };
@@ -103,6 +122,14 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
         body: postText || '（テキストなし）',
         type: 'repost',
       });
+    }
+    // RepostNextPost: 機能ONのユーザーがリポストされたら、リポスト主の「次の投稿」を見張る
+    if (targetDid && repostEnabledDids.has(targetDid) && targetDid !== senderDid) {
+      await sql`
+        INSERT INTO skyputter.repost_next_post (target_did, reposter_did)
+        VALUES (${targetDid}, ${senderDid})
+        ON CONFLICT (target_did, reposter_did) DO NOTHING
+      `;
     }
     return;
   }
@@ -185,6 +212,35 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
         }
       }
     }
+
+    // RepostNextPost: 明確に他人宛でない投稿（リプライ・引用・メンションのいずれも含まない）なら、
+    // この投稿主を見張っている待機行を発火させる。構造のみで判定する（宛先が登録ユーザーかは問わない）。
+    const isReply = !!replyParentUri;
+    const isQuote = embed?.$type === 'app.bsky.embed.record' && !!embed.record?.uri;
+    const hasMention = !!facets?.some((facet) =>
+      facet.features?.some((feature) => feature.$type === 'app.bsky.richtext.facet#mention')
+    );
+    if (!isReply && !isQuote && !hasMention && commit.rkey) {
+      const postUri = `at://${senderDid}/app.bsky.feed.post/${commit.rkey}`;
+      const fired = await sql`
+        UPDATE skyputter.repost_next_post
+        SET new_post_uri = ${postUri}, new_post_cid = ${commit.cid ?? ''}
+        WHERE reposter_did = ${senderDid} AND new_post_uri IS NULL
+        RETURNING target_did
+      `;
+      if (fired.length > 0) {
+        const senderName = await getDisplayName(senderDid);
+        await Promise.all(
+          fired.map((row) =>
+            sendPushToUser(row.target_did as string, {
+              title: `${senderName}さんが投稿しました`,
+              body: truncatedText || '（テキストなし）',
+              type: 'repost-next-post',
+            })
+          )
+        );
+      }
+    }
   }
 }
 
@@ -210,7 +266,7 @@ function buildWsUrl(): string {
 }
 
 export async function initJetstream(): Promise<void> {
-  await reloadRegisteredUsers();
+  await Promise.all([reloadRegisteredUsers(), reloadRepostNextPostUsers()]);
   connect();
 }
 
