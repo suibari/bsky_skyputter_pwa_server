@@ -19,16 +19,18 @@ async function requireUserDid(req: Request, res: Response): Promise<string | nul
 }
 
 // GET /api/notifications/repost-next-post
-// 未配信の RepostNextPost イベントを取得し、同時に消費（DELETE）する。
+// 表示対象の RepostNextPost イベントを取得する（同じリポスト主ごとに最新1件）。
 router.get('/repost-next-post', async (req: Request, res: Response) => {
   const userDid = await requireUserDid(req, res);
   if (!userDid) return;
 
   try {
     const rows = await sql`
-      DELETE FROM skyputter.repost_next_post
+      SELECT reposter_did, new_post_uri, new_post_cid, created_at
+      FROM skyputter.repost_next_post
       WHERE target_did = ${userDid} AND new_post_uri IS NOT NULL
-      RETURNING reposter_did, new_post_uri, new_post_cid, created_at
+      ORDER BY created_at DESC
+      LIMIT 50
     `;
     const events = rows.map((r) => ({
       uri: r.new_post_uri as string,

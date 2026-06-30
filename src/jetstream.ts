@@ -126,9 +126,13 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
     // RepostNextPost: 機能ONのユーザーがリポストされたら、リポスト主の「次の投稿」を見張る
     if (targetDid && repostEnabledDids.has(targetDid) && targetDid !== senderDid) {
       await sql`
-        INSERT INTO skyputter.repost_next_post (target_did, reposter_did)
-        VALUES (${targetDid}, ${senderDid})
-        ON CONFLICT (target_did, reposter_did) DO NOTHING
+        INSERT INTO skyputter.repost_next_post (target_did, reposter_did, new_post_uri, new_post_cid, created_at)
+        VALUES (${targetDid}, ${senderDid}, NULL, NULL, now())
+        ON CONFLICT (target_did, reposter_did)
+        DO UPDATE SET
+          new_post_uri = NULL,
+          new_post_cid = NULL,
+          created_at = now()
       `;
     }
     return;
@@ -224,7 +228,7 @@ async function handleEvent(event: JetstreamEvent): Promise<void> {
       const postUri = `at://${senderDid}/app.bsky.feed.post/${commit.rkey}`;
       const fired = await sql`
         UPDATE skyputter.repost_next_post
-        SET new_post_uri = ${postUri}, new_post_cid = ${commit.cid ?? ''}
+        SET new_post_uri = ${postUri}, new_post_cid = ${commit.cid ?? ''}, created_at = now()
         WHERE reposter_did = ${senderDid} AND new_post_uri IS NULL
         RETURNING target_did
       `;
